@@ -1,6 +1,6 @@
-defmodule HelpersTest do
+defmodule BitwiseTest do
   use ExUnit.Case, async: true
-  import RandPCG.Helpers
+  import RandPCG.Bitwise
 
   test "rotate_right_32" do
     {start, _}    = "0000 0000 0000 0000 0000 0000 0010 1101"

@@ -2,67 +2,31 @@ defmodule RandPCG do
   @moduledoc """
   Generate random numbers based on the [PCG Algorithm](http://www.pcg-random.org)
   """
-  use GenServer
-  use Bitwise, only_operators: true
-  import RandPCG.Helpers
+  use Application
+  use RandPCG.Bitwise
 
-  @name RandPCG
+  @name RandPCG.Worker
 
-  @multiplier64 6_364_136_223_846_793_005
-  @mask64 0xFFFFFFFFFFFFFFFF
-  @mask32 0xFFFFFFFF
+  def start(args \\ []), do: start(nil, args)
+  def start(type, nil), do: start(type, [])
+  def start(_type, args) do
+    import Supervisor.Spec, warn: false
 
-  @typedoc """
-  32 bit unsigned integer
-  Elixir has arbitrary precision, but the random numbers are limited
-  """
-  @type uint32 :: non_neg_integer
-  @typedoc """
-  64 bit unsigned integer
-  Elixir has arbitrary precision, but the random numbers are limited
-  """
-  @type uint64 :: non_neg_integer
+    opts = args
+           |> Keyword.take([:seed, :inc])
+           |> Keyword.put(:name, @name)
 
-  defmodule State do
-    @moduledoc """
-    Struct to hold the seed and incrimenter
-    """
-    @mask64 0xFFFFFFFFFFFFFFFF
-    defstruct seed: nil, inc: 1
+    children = [
+      worker(RandPCG.Worker, [opts]),
+    ]
 
-    @typedoc """
-    Struct to hold the seed and incrimenter
-    """
-    @type t :: %State{seed: RandPCG.uint64, inc: non_neg_integer}
-
-    @doc """
-    Generates a new seed based on `:os.system_time(:micro_seconds)`
-    """
-    @spec gen_seed() :: RandPCG.uint64
-    def gen_seed, do: :os.system_time(:micro_seconds) &&& @mask64
-
-    @doc """
-    Generates a new state with seed based on `:os.system_time(:micro_seconds)`
-    """
-    @spec gen_state() :: State.t
-    def gen_state, do: %State{seed: gen_seed(), inc: 1}
-  end
-
-  def start_link(opts \\ []) do
-    opts = Keyword.put_new(opts, :name, @name)
-    GenServer.start_link(__MODULE__, opts, opts)
-  end
-
-  def init(opts) do
-    seed = Keyword.get(opts, :seed, State.gen_seed())
-    inc = Keyword.get(opts, :inc, 1)
-    {:ok, advance(%State{seed: seed, inc: inc})}
+    opts = [strategy: :one_for_one, name: RandPCG.Supervisor]
+    Supervisor.start_link(children, opts)
   end
 
   @doc """
   Returns a random 32bit integer
   ## Examples
-      iex> RandPCG.start_link
       iex> RandPCG.random
       3242229798
 
@@ -149,130 +113,6 @@ defmodule RandPCG do
   @spec stop() :: :ok
   def stop do
     GenServer.stop(@name)
-  end
-
-  def handle_call(:random_32_int, _from, state) do
-    r = xsh_rr(state)
-    {:reply, r, advance(state)}
-  end
-
-  def handle_call({:random_32_int, count}, _from, state) do
-    {result, state} = Enum.reduce(1..count, {[], state},
-      fn(_nth, {list, state}) ->
-        r = xsh_rr(state)
-        {[r | list], advance(state)}
-      end)
-    {:reply, result, state}
-  end
-
-  def handle_call({:random_32_int, min, max}, _from, state) do
-    r = rand_int(min, max, state.seed)
-    {:reply, r, advance(state)}
-  end
-
-  def handle_call({:random_32_int, min, max, count}, _from, state) do
-    {result, state} = Enum.reduce(1..count, {[], state},
-      fn(_nth, {list, state}) ->
-        r = rand_int(min, max, state.seed)
-        {[r | list], advance(state)}
-      end)
-    {:reply, result, state}
-  end
-
-  def handle_call(:random_32_float, _from, state) do
-    r = xsh_rr(state) / @mask32
-    {:reply, r, advance(state)}
-  end
-
-  def handle_call({:random_32_float, count}, _from, state) do
-    {result, state} = Enum.reduce(1..count, {[], state},
-      fn(_nth, {list, state}) ->
-        r = xsh_rr(state) / @mask32
-        {[r | list], advance(state)}
-      end)
-    {:reply, result, state}
-  end
-
-  def handle_call({:random_enum, enum}, _from, %State{seed: seed} = state) do
-    case Enum.count(enum) do
-      0 ->
-        raise Enum.EmptyError
-      count ->
-        {:reply, Enum.at(enum, rand_int(0, count - 1, seed)), advance(state)}
-    end
-  end
-
-  def handle_call(:seed, _from, state) do
-    {:reply, state, state}
-  end
-  def handle_call({:seed, seed}, _from, %State{inc: inc}) do
-    {:reply, seed, %State{seed: seed, inc: inc}}
-  end
-
-  def handle_call(:inc, _from, state) do
-    {:reply, state, state}
-  end
-  def handle_call({:inc, inc}, _from, %State{seed: seed}) do
-    {:reply, inc, %State{seed: seed, inc: inc}}
-  end
-
-  def handle_call(:state, _from, state) do
-    {:reply, state, state}
-  end
-  def handle_call({:state, state}, _from, _state) do
-    {:reply, state, state}
-  end
-
-  @doc """
-  Returns a random 32bit integer using XSH RR
-  (good for 64-bit state, 32-bit output)
-  """
-  @spec xsh_rr(State.t) :: uint32
-  def xsh_rr(%State{seed: seed}), do: xsh_rr(seed)
-  @doc """
-  Returns a random 32bit integer using XSH RR
-  (good for 64-bit state, 32-bit output)
-  """
-  @spec xsh_rr(uint64) :: uint32
-  def xsh_rr(seed) do
-    xorshifted = (((seed >>> 18) ^^^ seed) >>> 27) &&& @mask32
-    rotate = (seed >>> 59) &&& @mask64
-    rotate_right_32(xorshifted, rotate)
-  end
-
-  @doc """
-  Move the state forward
-  """
-  @spec advance(State.t) :: State.t
-  def advance(%State{seed: seed, inc: inc}) do
-    new_seed = (((seed * @multiplier64) &&& @mask64) + inc) &&& @mask64
-    %State{seed: new_seed, inc: inc}
-  end
-
-  @doc """
-  Returns random integer, x, such that, 1 <= x <= n
-  """
-  @spec rand_int(non_neg_integer, non_neg_integer | State.t) :: uint32
-  def rand_int(n, seed) when n >= 1, do: rand_int(1, n, seed)
-  @spec rand_int(non_neg_integer, non_neg_integer, any) :: uint32
-  def rand_int(n, n, _seed), do: n
-  @spec rand_int(non_neg_integer, non_neg_integer, uint64 | State.t) :: uint32
-  def rand_int(min, max, seed) when min > max do
-    rand_int(max, min, seed)
-  end
-  @spec rand_int(non_neg_integer, non_neg_integer, State.t) :: uint32
-  def rand_int(min, max, %State{seed: seed}), do: rand_int(min, max, seed)
-  @doc """
-  Returns random integer, x, such that, min <= x <= max
-  """
-  @spec rand_int(non_neg_integer, non_neg_integer, uint64) :: uint32
-  def rand_int(min, max, seed) do
-    trunc(min + xsh_rr(seed) / (@mask32 / (1 + max - min)))
-  end
-
-  @spec gen_state() :: State.t
-  def gen_state do
-    advance(State.gen_state())
   end
 
   @spec timeout(non_neg_integer) :: non_neg_integer

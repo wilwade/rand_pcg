@@ -13,7 +13,7 @@ defmodule Mix.Tasks.Gen do
   def run([]), do: IO.puts(docs())
   def run(["nist", count]) do
     {count, _} = Integer.parse(count)
-    RandPCG.start_link
+    RandPCG.start
 
     count
     |> generate_random_32()
@@ -21,7 +21,7 @@ defmodule Mix.Tasks.Gen do
   end
   def run([count]) do
     {count, _} = Integer.parse(count)
-    RandPCG.start_link
+    RandPCG.start
 
     count
     |> generate_random_32()

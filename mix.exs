@@ -1,7 +1,7 @@
 defmodule RandPCG.Mixfile do
   use Mix.Project
 
-  @version "0.1.1"
+  @version "0.1.2"
 
   def project do
     [app: :rand_pcg,
@@ -23,7 +23,7 @@ defmodule RandPCG.Mixfile do
 
   # Configuration for the OTP application
   def application do
-    []
+    [mod: {RandPCG, []}]
   end
 
   # Dependencies can be Hex packages:

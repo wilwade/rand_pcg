@@ -10,7 +10,7 @@ Documentation: https://hexdocs.pm/rand_pcg/
 
     ```elixir
     def deps do
-      [{:rand_pcg, "~> 0.1.1"}]
+      [{:rand_pcg, "~> 0.1.2"}]
     end
     ```
 
@@ -26,9 +26,6 @@ Documentation: https://hexdocs.pm/rand_pcg/
 ## Examples
 
 ### GenServer Option
-
-Ensure the service is running if not included as an application:
-`RandPCG.start_link`
 
 #### Get Some Random
 
@@ -71,8 +68,8 @@ You will have to maintain your own state of the random number generator.
 #### Random 32 bit Integer
 
 ```elixir
-state = RandPCG.gen_state()
-random_int_32 = RandPCG.xsh_rr(state)
+state = RandPCG.PCG.gen_state()
+random_int_32 = RandPCG.PCG.xsh_rr(state)
 state = advance(state)
 ```
 
@@ -81,14 +78,14 @@ If you do not advance the state, you will receive the same random number.
 #### Random Integer in a Range
 
 ```elixir
-state = RandPCG.gen_state()
+state = RandPCG.PCG.gen_state()
 min = 1
 max = 10
-random_1_10_inclusive = RandPCG.rand_int(min, max, state)
+random_1_10_inclusive = RandPCG.PCG.rand_int(min, max, state)
 state = advance(state)
 ```
 
-`RandPCG.gen_state` initial seed is based on `:os.system_time(:micro_seconds)`
+`RandPCG.PCG.gen_state` initial seed is based on `:os.system_time(:micro_seconds)`
 
 ## References
 
